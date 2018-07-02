@@ -1,0 +1,199 @@
+---
+title: "Example ETL for Data warehousing & Business Intelligence"
+author: "Sean McNally"
+date: "24 January 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document was written in R Markdown :) See [here](http://rmarkdown.rstudio.com/) for more information.
+
+# Disclaimer:
+If you use this code for your project, you will be capped at a pass grade for the ETL section of your project...
+
+# Web Scraping with R (data source 1)
+
+Welcome to this tutorial on web scraping with R. You will all likely want to source some data from the web to satisfy your unstructured data source requirements. This tutorial will show you an example of how to do this! It will also show you how to extract data from social media (Twitter) and some structured financial data (Quandl)
+
+ 
+
+For this example we will first scrape data from IMDB for movies that Leonardio De Caprio has starred in. The movies chosen at random are The Revenant, The Wolf of Wall Street, Django Unchained, Inception and Blood Diamond. We will be using the R-Vest package for scraping the appropriate webpage. First install the package using install.packages("rvest"). Then load the package as seen below.
+
+```{r load lib, message = FALSE}
+library("rvest")
+```
+
+Now we will parse the web pages using the read_html() function.
+
+```{r webpages, warning = FALSE}
+the_revenant <- read_html("http://www.imdb.com/title/tt1663202/?ref_=fn_al_tt_1")
+wolf_of_wall_street <- read_html("http://www.imdb.com/title/tt0993846/?ref_=nv_sr_1")
+django_unchained <- read_html("http://www.imdb.com/title/tt1853728/?ref_=nv_sr_1")
+inception <- read_html("http://www.imdb.com/title/tt1375666/?ref_=nv_sr_1")
+blood_diamond <- read_html("http://www.imdb.com/title/tt0450259/?ref_=nv_sr_1")
+```
+
+To extract information from HTML, css selectors can be used. Download and install selectorGadget for Chrome to make your life easier. 
+
+See [here](http://www.w3schools.com/cssref/css_selectors.asp) for more information on using the selectors. 
+
+[This](http://flukeout.github.io/) is a game which teaches you how to use CSS selectors. Have fun!
+
+Here we will extract the ratings for each movie using its CSS selector:
+
+```{r movie ratings, warning = FALSE}
+the_revenant_rating <- 
+  the_revenant %>% 
+  html_node("strong span") %>%
+  html_text() %>%
+  as.numeric()
+
+wolf_rating <- 
+  wolf_of_wall_street %>% 
+  html_node("strong span") %>%
+  html_text() %>%
+  as.numeric()
+
+django_rating <- 
+  django_unchained %>% 
+  html_node("strong span") %>%
+  html_text() %>%
+  as.numeric()
+
+inception_rating <- 
+  inception %>% 
+  html_node("strong span") %>%
+  html_text() %>%
+  as.numeric()
+
+blood_diamond_rating <- 
+  blood_diamond %>% 
+  html_node("strong span") %>%
+  html_text() %>%
+  as.numeric()
+
+```
+
+```{r show ratings}
+the_revenant_rating
+wolf_rating
+django_rating
+inception_rating
+blood_diamond_rating
+```
+
+Now we will extract the financial information for the movies. you will notice that this extracts the relevant data but it is dirty. Some cleansing will be required on the output before putting the data into your data warehouse. 
+
+```{r financial}
+the_revenant_financial <- 
+  the_revenant %>% 
+  html_nodes("#titleDetails ,.txt-block") %>%
+  html_text() 
+
+wolf_financial <- 
+  wolf_of_wall_street %>% 
+  html_nodes("#titleDetails ,.txt-block") %>%
+  html_text() 
+
+django_financial <- 
+  django_unchained %>% 
+  html_nodes("#titleDetails ,.txt-block") %>%
+  html_text() 
+
+inception_financial <- 
+  inception %>% 
+  html_nodes("#titleDetails ,.txt-block") %>%
+  html_text() 
+
+blood_diamond_financial <- 
+  blood_diamond %>% 
+  html_nodes("#titleDetails ,.txt-block") %>%
+  html_text() 
+
+```
+
+
+```{r show financials}
+the_revenant_financial[11:13]
+wolf_financial[10:12]
+django_financial[11:13]
+inception_financial[11:13]
+blood_diamond_financial[11:13]
+```
+
+## Interacting with the Quandl API (data source 2)
+
+Now, with a bit of research I was able to find out which companies produced/distributed the movies. Most of those companies are privately owned. As a result they are not traded on a stock exchange. However, for this use case I have decided to take the stock information of their parent companies who are listed on exchanges. 
+
+* The Revenant - 20th Century Fox (NASDAQ:FOXA)
+* The Wolf of Wall Street - Paramount Pictures (owned by Viacom, NASDAQ:VIAB)
+* Inception - Warner Bros (owned by Time Warner INC - NYSE:TWX)
+* Blood Diamond - Warner Bros (owned by Time Warner INC - NYSE:TWX)
+* Django Unchained - Sony Pictures Releasing (Owned by Sony Corp - NYSE:SNE)
+
+Once we have the tickers, we can search for the Quandl code of the company.
+
+The Quandl API is then used to get the stock data:
+
+```{r quandl, message = FALSE, results='hide'}
+library("Quandl")
+```
+
+Here we set up Quandl, putting in your authentication code. The vast majority of APIs require you to input an API key. Often you need to register with that service to get a key but often they are free.
+
+```{R Quandl Key}
+
+Quandl.api_key("2s5QTMHejVsxzogXMC7j")
+
+```
+
+Now, with one call to the API we can extract stock data for each specific company.
+
+```{R Quandl call, message = FALSE, results='hide', warning = FALSE}
+stocks.foxa = Quandl("YAHOO/FOXA", collapse="daily", start_date="2005-01-01", type="ts")
+stocks.viab = Quandl("YAHOO/VIAB", collapse="daily", start_date="2005-01-01", type="ts")
+stocks.twx = Quandl("GOOG/NYSE_TWC", collapse="daily", start_date="2005-01-01", type="ts")
+stocks.sne = Quandl("GOOG/NYSE_SNE", collapse="daily", start_date="2005-01-01", type="ts")
+
+```
+
+### Interacting with Twitter API (data source 3)
+Similar to Quandl, you are required to get API keys to use the Twitter API. These can be obtained from [here](https://dev.twitter.com/) 
+
+One point to note here is that you can only gather what the Twitter hose is outputting right now. As a result, you cant collect historical tweets unless you were to pay a company who specialises in gathering tweets for their data.
+
+Now we need to input your keys and tokens: (note: do not use the existing tokens here as you will exceed the API limit)
+```{R twitter keys}
+library(twitteR)
+api_key <- "w0u2TyUtAga0dPLAc1huwwGYq"
+api_secret <- "sO4kBhyLJEgSB2RaOLIH3qAZbfIjS582vyobM8HVRefLhQMF72"
+access_token <- "709310096-v2FkS6uT5cOFbQklVwiH3oeqKP7Hkw8lWjs7WQz5"
+access_token_secret <- "MGDyKHNeeZFhi9QL6AdkqRLLJtUd9gMjsCyQHxEnL3src"
+```
+
+```{R setup Twitter}
+setup_twitter_oauth(api_key,api_secret,access_token,access_token_secret)
+```
+
+No we simply have to call the search Twitter function to get tweets for whatever search tag or user we want.The resultType tag specifies wether to return new tweets or the most popular tweets. If you are searching older topics you amy want to leave this option out as you probably won't return much from the Twittersphere. I have set number of tweets to return to 1. You will likely want thousands for your project to provide some value to your results.
+
+```{R tweets, message = FALSE,  warning = FALSE}
+InceptionTweets <- searchTwitter('Inception', n = 1, resultType = "popular")
+RevenantTweets <- searchTwitter('The Revenant', n = 1, resultType = "popular")
+WolfTweets <- searchTwitter('The Wolf of Wall Street', n = 1, resultType = "recent")
+InceptionTweets <- searchTwitter('Inception', n = 1, resultType = "popular")
+BloodDiamondTweets <- searchTwitter('Blood&Diamond', n = 1, resultType = "popular")
+```
+
+Now, we have now extracted the following data:
+
+* Film ratings and financial information from IMDB
+* Stock price information from Quandl
+* Tweets from Twitter
+ 
+While this is probably enough to answer three case studies, for your projects, ideally you would want to collect more than 3 data sources to score well. This ETL covers just the E part of ETL (Extract, transform and load). As pointed out earlier, there is some dirty data which would need cleaning here (the financial data from IMDB). In addition, in your project if you are using Twitter as a data source, you will probably choose to do some analysis on the tweets such as a [sentiment analysis](https://www.r-bloggers.com/sentiment-analysis-with-machine-learning-in-r/). 
+
+The data you source will likely need some transformation before being loaded into your data warehouse using SSIS. These transformations can be done using a wide variety of tools including but not limited to R, Excel and Open Refine. If you want to fully automate your ETL process, doing the full job using a programming language such as R is probably your best bet. Good luck!
